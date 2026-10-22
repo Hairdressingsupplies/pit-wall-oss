@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pit Wall</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/theme.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <canvas id="stars" aria-hidden="true"></canvas>
+
+  <header class="top">
+    <div class="brand">
+      <svg class="gauge" id="gauge" viewBox="0 0 120 120" role="img" aria-labelledby="gauge-title">
+        <title id="gauge-title">Claude usage: inner ring 5-hour window, outer ring week</title>
+        <circle class="orbit-track" cx="60" cy="60" r="52"/>
+        <circle class="orbit-track" cx="60" cy="60" r="38"/>
+        <circle class="orbit-fill outer" id="g7" cx="60" cy="60" r="52" pathLength="100"/>
+        <circle class="orbit-fill inner" id="g5" cx="60" cy="60" r="38" pathLength="100"/>
+        <circle class="planet" cx="60" cy="60" r="20"/>
+      </svg>
+      <div class="brand-text">
+        <h1>Pit Wall</h1>
+        <p class="usage" id="usage">Usage appears after your first message here.</p>
+      </div>
+    </div>
+    <div class="top-stats" id="stats"></div>
+    <div class="top-actions">
+      <button class="ghost" id="palette-btn" type="button" title="Jump to anything (Ctrl+K)">Find <kbd>Ctrl K</kbd></button>
+      <button class="ghost" id="brief-btn" type="button" title="Today at a glance">Brief</button>
+      <details class="menu">
+        <summary class="ghost" aria-label="More">More</summary>
+        <div class="menu-list">
+          <button type="button" id="palette-menu" class="phone-only">Find</button>
+          <button type="button" id="brief-menu" class="phone-only">Brief</button>
+          <button type="button" id="notify-btn" aria-pressed="true">Notifications on</button>
+          <button type="button" id="read-aloud-btn" aria-pressed="false" hidden title="Read each of Claude’s replies out loud when it finishes (this device only)">Read replies aloud: off</button>
+          <label class="menu-field" id="voice-field" hidden title="Natural voices are made on the PC, so reply text stays there. Google voices send the text to Google.">Voice <select id="voice-select"></select></label>
+          <button type="button" id="group-btn" aria-pressed="true" title="Sessions board: a lane per project, or every chat in one list (one list also stops Claude filing chats into projects)">Grouped by project</button>
+          <label class="menu-field">Theme <select id="theme-select"></select></label>
+          <button type="button" id="organise-btn">Organise projects now</button>
+        </div>
+      </details>
+      <button class="primary" id="new-btn" type="button" aria-label="New session"><span class="new-plus" aria-hidden="true">+</span><span class="new-label">New session</span></button>
+    </div>
+  </header>
+
+  <main class="layout" id="layout">
+    <section class="board" aria-label="Sessions">
+      <div class="board-bar">
+        <nav class="tabs" role="tablist" aria-label="Views">
+          <button role="tab" class="tab" data-group="board" data-view="board" aria-selected="true">Sessions</button>
+          <button role="tab" class="tab" data-group="projects" data-view="projects" aria-selected="false">Projects</button>
+          <button role="tab" class="tab" data-group="automation" data-view="queue" aria-selected="false">Automation</button>
+          <button role="tab" class="tab" data-group="insights" data-view="usage" aria-selected="false">Insights</button>
+        </nav>
+        <input class="search" id="search" type="search" placeholder="Filter sessions and projects" aria-label="Filter sessions and projects">
+        <button class="ghost small" id="search-all" type="button" hidden>Search inside all conversations</button>
+      </div>
+      <nav class="subtabs" id="subtabs" aria-label="Sections" hidden></nav>
+      <div id="view"></div>
+    </section>
+
+    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Drag to resize the chat" tabindex="0" hidden></div>
+    <section class="chat" id="chat" aria-label="Chat" hidden></section>
+  </main>
+
+  <dialog id="new-dialog" class="dialog">
+    <form id="new-form" method="dialog">
+      <h2>New session</h2>
+      <div class="tpl-row" id="tpl-row"></div>
+      <label>First message
+        <textarea name="message" rows="6" placeholder="What should Claude work on? Paste or drop images here too. Start with /skill-name to use a skill."></textarea>
+      </label>
+      <p class="hint" id="new-model-hint"></p>
+      <div class="new-images">
+        <div class="thumbs" id="new-thumbs" hidden></div>
+        <button type="button" class="ghost small" id="new-attach">Attach images</button>
+        <input type="file" id="new-file-pick" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+      </div>
+      <div class="grid2">
+        <label>Name <input name="name" placeholder="e.g. Callback re-queue fix"></label>
+        <label>Project <select name="projectId"></select></label>
+        <label>Folder <input name="cwd" required spellcheck="false" aria-label="Folder path" placeholder="Type a folder path"></label>
+        <label>Model <select name="model"></select></label>
+        <label>Effort <select name="effort"></select></label>
+        <label>Permissions <select name="permissionMode"></select></label>
+      </div>
+      <p class="form-error" id="new-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="new-cancel">Cancel</button>
+        <button type="submit" class="primary">Start session</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

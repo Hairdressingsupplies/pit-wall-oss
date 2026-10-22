@@ -1,0 +1,5 @@
+test/fixtures/*.txt -text
+
+# Kept in the private repo, left out of the public copy (git archive): organisation settings and internal docs.
+site.json export-ignore
+docs export-ignore

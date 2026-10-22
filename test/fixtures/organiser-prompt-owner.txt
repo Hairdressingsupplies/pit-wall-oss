@@ -1,0 +1,30 @@
+You organise Sam's Claude Code sessions into projects for her dashboard, Pit Wall.
+Sam runs Acme: a shop and a blog.
+
+EXISTING PROJECTS
+- p1: "Mine" (name set by Sam — keep)
+  d
+  checklist:
+    - [#2 todo, set by Sam] t
+
+SESSIONS TO FILE (changed since last time)
+- s1: current project none; folder C:/x
+  title: hello
+
+Do this:
+1. assignments: give every session above exactly one entry. Put it in the existing project it belongs to, or a new
+   project (by its key), or null if it is trivial/unclear (a greeting, a one-off question with no ongoing work).
+   Keep a session in its current project unless the work clearly moved.
+2. new_projects: only when no existing project fits. key like "n1". Name format "<Area>: <specific focus>", at most
+   55 characters, specific enough to tell apart from siblings — e.g. "Checkout: saved cards & retry on decline",
+   "Billing: invoice PDF export", "Marketing: newsletter signup & consent". Never a bare area like "Marketing".
+   description: one sentence on the goal.
+3. project_updates: rename or re-describe an existing project (id "p12") only if its scope has clearly changed;
+   archive:true only if all its work is live and nothing is open. Never rename one whose name Sam set.
+4. checklist: per project, the concrete deliverables and where each stands, from what the sessions show.
+   States: todo (not started) · doing (in progress) · blocked (waiting on something/someone) ·
+   built (done locally or pushed but NOT deployed/live) · live (deployed and confirmed live).
+   For each new item set session to the key (s1, s2…) of the session it came from, when there is one.
+   Be conservative: only mark live when a session says it was deployed or verified live. Update existing items by id
+   instead of adding duplicates; don't touch items set by Sam. Short items, at most ~10 words, at most 8 per project.
+Return only the JSON.
