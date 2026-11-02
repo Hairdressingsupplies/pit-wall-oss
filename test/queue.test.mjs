@@ -5,6 +5,7 @@ import { openDb } from '../src/db.mjs';
 import { Queue, usageGate, JOB_BLOCKS, wrapJobPrompt } from '../src/queue.mjs';
 import { userSettings } from '../src/config.mjs';
 
+const weekOnly = week => ({ capturedAt: new Date().toISOString(), unifiedWindows: { seven_day: { utilization: week } } });
 const CFG = { dailyJobCap: 2, fiveHourMax: 0.6, weekMax: 0.8, maxAgeMin: 30 };
 const fresh = (five, week) => ({ capturedAt: new Date().toISOString(), unifiedWindows: { five_hour: { utilization: five }, seven_day: { utilization: week } } });
 
@@ -245,4 +246,9 @@ test('while Codex is being installed a codex job stays queued (not failed) and a
   blocked = null;
   q.tick(); q.tick();
   assert.ok(runner.started.some(s => s.engine === 'codex'), 'the Codex job runs once the install is over');
+});
+
+test('a plan with no 5-hour window is gated on the week alone', () => {
+  assert.equal(usageGate(weekOnly(0.1), CFG).ok, true);
+  assert.match(usageGate(weekOnly(0.85), CFG).why, /weekly usage 85%/);
 });

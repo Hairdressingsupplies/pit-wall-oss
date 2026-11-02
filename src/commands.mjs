@@ -11,7 +11,7 @@ const PINNED = ['usage', 'context', 'compact', 'model', 'effort', 'recap'];
 const HIDDEN = new Set(['clear', 'heapdump', 'workflow-launch-exec', 'design-consent', 'design-revoke']);
 
 const BUILTIN = {
-  usage: 'Your 5-hour and weekly plan usage',
+  usage: 'Your plan usage limits',
   context: 'What is filling this chat’s context',
   compact: 'Summarise the chat so far to free up context — add instructions after it if you like',
   model: 'Switch model for this chat, e.g. /model sonnet',

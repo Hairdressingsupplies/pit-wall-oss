@@ -46,7 +46,7 @@ export async function renderUsage() {
   const bar = x => h('span', { class: 'bar' }, h('span', { style: `width:${Math.max(2, Math.round(x * 100))}%` }));
   put(view,
     h('div', { class: 'status-strip' },
-      h('strong', {}, rate ? `${S.data.usage.rateCodex ? 'Claude ' : ''}5-hour ${pct(rate.five_hour?.utilization)} · week ${pct(rate.seven_day?.utilization)}` : 'No usage reading yet'),
+      h('strong', {}, rate ? `${S.data.usage.rateCodex ? 'Claude ' : ''}${rate.five_hour ? `5-hour ${pct(rate.five_hour.utilization)} · ` : ''}week ${pct(rate.seven_day?.utilization)}` : 'No usage reading yet'),
       burn?.fullAt ? h('span', { class: 'hot-text' }, `At this pace the 5-hour limit runs out about ${hhmm(burn.fullAt)}`) : burn ? h('span', {}, `Burning about ${Math.round(burn.perHour * 100)} points an hour`) : null,
       h('span', {}, `${fmtK(u.tokens)} tokens handled in 7 days${u.totals?.codex > 0 ? ` (Claude ${fmtK((u.tokensEngine ?? u.totals).claude)} · GPT ${fmtK((u.tokensEngine ?? u.totals).codex)})` : ''}${u.agentShare >= 0.005 ? ` (agents and workflows ${pct(u.agentShare)} of the cost)` : ''}`)),
     codexUsageStrip(S.data.usage.rateCodex, burnCodex),
@@ -166,7 +166,7 @@ export async function showBrief({ markSeen = true } = {}) {
     .then(() => li.remove()).catch(D.fail);
   const dlg = h('dialog', { class: 'dialog brief', onclose: () => dlg.remove() },
     h('h2', {}, `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}${S.data?.options.userName ? `, ${S.data.options.userName}` : ''}`),
-    h('p', { class: 'pdesc' }, `Since ${new Date(b.since).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.${r ? ` ${b.rateEngine === 'codex' ? 'GPT usage' : 'Usage'}: 5-hour ${pct(r.five_hour?.utilization)}, week ${pct(r.seven_day?.utilization)}.` : ''}`),
+    h('p', { class: 'pdesc' }, `Since ${new Date(b.since).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.${r ? ` ${b.rateEngine === 'codex' ? 'GPT usage' : 'Usage'}: ${r.five_hour ? `5-hour ${pct(r.five_hour.utilization)}, ` : ''}week ${pct(r.seven_day?.utilization)}.` : ''}`),
     item('Waiting on you', b.needsYou.length, h('ul', {}, b.needsYou.slice(0, 8).map(n => h('li', {}, h('a', { href: '#', onclick: e => { e.preventDefault(); dlg.close(); D.openChat(n.id); } }, n.name), ` — ${n.reason}`)))),
     item('Follow-ups due today', b.followupsDue.length, h('ul', {}, b.followupsDue.map(f => h('li', {}, f.text)))),
     roundupWaiting() ? item('Your weekly roundup is ready', 1, h('p', {}, h('a', { href: '#', onclick: e => { e.preventDefault(); dlg.close(); openRoundup(); } }, `Read it and send it to ${roundupTo()}`))) : null,

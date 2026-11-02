@@ -52,10 +52,21 @@ export function usageGate(rate, { fiveHourMax, weekMax, maxAgeMin }, now = Date.
   return { ok: true, why: 'Ready' };
 }
 
-/** Spare capacity: within 45 min of the 5-hour window resetting (unused allowance about to vanish), or under 20% used. */
+const WEEK_MS = 7 * 24 * 3_600_000;
+
+/**
+ * Spare capacity: within 45 min of the 5-hour window resetting (unused allowance about to vanish), or under 20% used.
+ * A plan with no 5-hour window judges the week instead: under 20% used, or used less than the share of the week gone.
+ */
 export function offPeakWindow(rate, now = Date.now()) {
   const five = rate?.unifiedWindows?.five_hour;
-  if (!five) return false;
+  if (!five) {
+    const week = rate?.unifiedWindows?.seven_day;
+    if (!week) return false;
+    const used = week.utilization ?? 1;
+    if (used < 0.2) return true;
+    return !!week.resetsAt && used < 1 - (week.resetsAt * 1000 - now) / WEEK_MS;
+  }
   if ((five.utilization ?? 1) < 0.2) return true;
   return !!five.resetsAt && five.resetsAt * 1000 - now < 45 * 60_000;
 }
@@ -68,13 +79,14 @@ export class Queue {
   }
 
   status() {
-    const gate = usageGate(this.#rate(defaultEngine(this.store)), this.config, this.now().getTime());
+    const rate = this.#rate(defaultEngine(this.store));
+    const gate = usageGate(rate, this.config, this.now().getTime());
     return {
       enabled: this.store.get('queueEnabled', true),
       why: this.store.get('queueEnabled', true) ? (this.lastWhy ?? gate.why) : 'Paused by you',
       startedToday: this.store.queueStartedOn(this.today()),
       dailyCap: this.config.dailyJobCap,
-      limits: { fiveHour: this.config.fiveHourMax, week: this.config.weekMax },
+      limits: { fiveHour: rate?.unifiedWindows?.five_hour ? this.config.fiveHourMax : null, week: this.config.weekMax },
       blocked: BLOCKED_SUMMARY,
     };
   }
@@ -121,7 +133,7 @@ export class Queue {
     if (this.store.activeQueueItems().length) { this.lastWhy = 'Working on a job'; if (changed) this.onChange(); return; }
     const queued = this.store.queuedItems();
     if (!queued.length) { this.lastWhy = 'Nothing queued'; if (changed) this.onChange(); return; }
-    // "Off-peak" jobs wait for spare capacity: just before the 5-hour window resets, or when it's barely used.
+    // "Off-peak" jobs wait for spare capacity: just before the 5-hour window resets, or when it's barely used (no 5-hour window: see offPeakWindow).
     // A job with a start time waits for it; off-peak jobs wait for spare capacity (on the engine it will run on).
     const offPeakFor = j => offPeakWindow(this.#rate(this.#engineOf(j)), this.now().getTime());
     const timeOk = j => !j.start_at || Date.parse(j.start_at) <= this.now().getTime();

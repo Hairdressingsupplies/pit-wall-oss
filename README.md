@@ -163,7 +163,7 @@ To stop it starting at login: delete **Pit Wall** from `shell:startup`.
 - **Search** — the board filter searches names and summaries; press **Enter** (or *Search all
   conversations*) to search inside every transcript, including older ones. Runs in a worker thread.
 - **Queue** — jobs Claude works through in the background, one at a time, in auto mode, only while
-  your 5-hour usage is under 60 % and the week under 80 %, up to 10 a day. Claude Code itself
+  your 5-hour usage is under 60 % (on plans that have a 5-hour limit) and the week under 80 %, up to 10 a day. Claude Code itself
   hard-blocks (via `--disallowedTools`, in both Bash and PowerShell, anywhere in the command):
   sending/replying/forwarding/deleting email, sharing/deleting Drive files, Claude in Chrome, `ssh`,
   `scp`, `rsync`, `git push`, `wrangler deploy` / `d1 execute`, `deploy.sh`, and any `jobBlockedCommands` in
@@ -185,7 +185,8 @@ To stop it starting at login: delete **Pit Wall** from `shell:startup`.
 - **Scheduled jobs** — your Windows scheduled tasks that run Claude or something in
   `Documents\GitHub`: schedule, last run and result (failures in red), next run, **Run now**
   (asks to confirm), **Switch on/off**.
-- **Usage** — 5-hour and weekly gauges from Claude Code's own rate-limit readings. They arrive free
+- **Usage** — 5-hour and weekly gauges from Claude Code's own rate-limit readings; a plan with no
+  5-hour limit (Ultra) reports only the week, so only the week shows. They arrive free
   with every Pit Wall session and organiser call; if the page is open and the reading is over 30
   minutes old, one tiny Haiku call refreshes it (max 40 a day).
 - **Backups** — `data/pitwall.db` is copied to `data/backups/` daily; the last 7 are kept.
@@ -198,12 +199,12 @@ To stop it starting at login: delete **Pit Wall** from `shell:startup`.
   just that summary; the old one is marked "continued in a fresh session". Reopening a big session
   that has been idle over an hour (its cache has expired) shows a warning offering this instead.
 - **Usage tab** — heaviest sessions and projects by share of the week, burn rate ("the 5-hour limit
-  runs out about 17:40"), and tips (Fresh start candidates, screenshot-heavy sessions).
+  runs out about 17:40", plans with that limit only), and tips (Fresh start candidates, screenshot-heavy sessions).
 - **Project budgets** — set a weekly % on a project card; it's flagged when it goes over.
 - **Model suggestions** — the New session and Queue forms suggest Sonnet for writing/reports/lookups
   and your usual model for code. Background jobs and agents default to **Sonnet**.
 - **Off-peak jobs** — a queue option that waits until the 5-hour window is about to reset or is
-  under 20% used.
+  under 20% used. With no 5-hour limit it waits until the week is under 20% used or behind pace.
 
 ### Safety and tracking
 

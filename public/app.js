@@ -92,7 +92,7 @@ function otherGaugeLine(o) {
   const w = o?.rate?.unifiedWindows;
   if (!w) return '';
   const p = x => `${Math.round((x?.utilization ?? 0) * 100)}%`;
-  return ` ${o.label} 5-hour ${p(w.five_hour)} · week ${p(w.seven_day)}${w.five_hour?.resetsAt ? ` · resets ${clock(w.five_hour.resetsAt)}` : ''}.`;
+  return ` ${o.label} ${w.five_hour ? `5-hour ${p(w.five_hour)} · ` : ''}week ${p(w.seven_day)}${w.five_hour?.resetsAt ? ` · resets ${clock(w.five_hour.resetsAt)}` : ''}.`;
 }
 function renderHeader() {
   const d = S.data;
@@ -102,12 +102,15 @@ function renderHeader() {
   u.replaceChildren();
   if (rate?.unifiedWindows) {
     const five = rate.unifiedWindows.five_hour, week = rate.unifiedWindows.seven_day;
+    // No 5-hour window in the reading means this plan doesn't have one (Ultra since 2026-10-31): the week ring alone.
+    $('#gauge').classList.toggle('week-only', !five);
+    $('#gauge-title').textContent = five ? 'Claude usage: inner ring 5-hour window, outer ring week' : `${label || 'Claude'} usage: ring shows the week`;
     $('#g5').style.strokeDasharray = `${Math.round((five?.utilization ?? 0) * 100)} 100`;
     $('#g7').style.strokeDasharray = `${Math.round((week?.utilization ?? 0) * 100)} 100`;
     const pct = x => h('b', { class: x >= 0.8 ? 'hot' : '' }, `${Math.round(x * 100)}%`);
-    u.append(label ? `${label} 5-hour ` : '5-hour ', pct(five?.utilization ?? 0), ' · week ', pct(week?.utilization ?? 0),
+    u.append(...(five ? [label ? `${label} 5-hour ` : '5-hour ', pct(five.utilization ?? 0), ' · week '] : [label ? `${label} week ` : 'Week ']), pct(week?.utilization ?? 0),
       burn?.fullAt ? h('span', { class: 'hot' }, ` · runs out ~${new Date(burn.fullAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`) : '');
-    u.title = `5-hour window resets ${five?.resetsAt ? clock(five.resetsAt) : '?'}, week resets ${week?.resetsAt ? dayName(week.resetsAt) : '?'}. ${fmtTokens(d.usage.tokensToday)} tokens today. Measured ${ago(rate.capturedAt)}.${otherGaugeLine(other)}`;
+    u.title = `${five ? `5-hour window resets ${five.resetsAt ? clock(five.resetsAt) : '?'}, week` : 'Week'} resets ${week?.resetsAt ? dayName(week.resetsAt) : '?'}. ${fmtTokens(d.usage.tokensToday)} tokens today. Measured ${ago(rate.capturedAt)}.${otherGaugeLine(other)}`;
   } else {
     u.append('Usage shows after your first message here');
   }
@@ -611,7 +614,7 @@ function renderQueue() {
     } catch (err) { fail(err); }
   } },
   h('h3', {}, 'Add a job'),
-  h('p', { class: 'pdesc' }, `${defaultEngine() === 'codex' ? 'Codex' : 'Claude'} works through these one at a time in the background, only while your 5-hour usage is under ${pct(q.limits.fiveHour)} and your week under ${pct(q.limits.week)}, up to ${q.dailyCap} a day${defaultEngine() === 'codex' ? '. Codex jobs run sandboxed with no network; anything needing approval is declined' : `, in auto mode. Claude Code hard-blocks: ${q.blocked}. Everything else relies on auto mode and your CLAUDE.md rules`} — so ask for drafts and reports, not live changes.`),
+  h('p', { class: 'pdesc' }, `${defaultEngine() === 'codex' ? 'Codex' : 'Claude'} works through these one at a time in the background, only while your ${q.limits.fiveHour != null ? `5-hour usage is under ${pct(q.limits.fiveHour)} and your week under` : 'week is under'} ${pct(q.limits.week)}, up to ${q.dailyCap} a day${defaultEngine() === 'codex' ? '. Codex jobs run sandboxed with no network; anything needing approval is declined' : `, in auto mode. Claude Code hard-blocks: ${q.blocked}. Everything else relies on auto mode and your CLAUDE.md rules`} — so ask for drafts and reports, not live changes.`),
   h('div', { class: 'grid2' },
     h('label', {}, 'Title', h('input', { name: 'title', required: true, placeholder: 'e.g. Margin check on spring offers' })),
     h('label', {}, 'Project', projectField('projectId')),
@@ -622,7 +625,7 @@ function renderQueue() {
   h('p', { class: 'hint', id: 'queue-model-hint', hidden: effectiveEngine(null) === 'codex' }),
   h('label', { class: 'start-at' }, 'Start at (optional — leave empty to start as soon as allowed)', h('input', { type: 'datetime-local', name: 'startAt' })),
   h('label', { class: 'check-label' }, h('input', { type: 'checkbox', name: 'offPeak' }),
-    ' Off-peak: wait for spare capacity (just before your 5-hour window resets, or while it is under 20% used)'),
+    ` Off-peak: wait for spare capacity (${q.limits.fiveHour != null ? 'just before your 5-hour window resets, or while it is under 20% used' : 'while your week is under 20% used or behind pace'})`),
   h('div', { class: 'dialog-actions' }, h('button', { class: 'primary', type: 'submit' }, 'Add to queue')));
   setTimeout(() => { if (form.elements.prompt) more.modelHint(form.elements.prompt, form.elements.model, form.querySelector('#queue-model-hint')); });
 

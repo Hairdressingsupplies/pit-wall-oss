@@ -152,3 +152,14 @@ test('analyseTranscript counts a Codex usage entry once, and GPT tokens cost a f
   assert.ok(Number.isFinite(a.cost) && a.cost > 0, 'token-equivalents, never NaN');
   assert.equal(a.cost, 40 + 12 * 5 + 60 * 0.1);
 });
+
+test('with no 5-hour window, off-peak judges the week: under 20% used, or behind pace', () => {
+  const now = Date.parse('2026-11-02T12:00:00Z'), day = 86_400;
+  const week = (utilization, daysLeft) => ({ unifiedWindows: { seven_day: { utilization, resetsAt: now / 1000 + daysLeft * day } } });
+  assert.equal(offPeakWindow(week(0.1, 6), now), true);
+  assert.equal(offPeakWindow(week(0.3, 6), now), false); // 14% of the week gone, 30% used
+  assert.equal(offPeakWindow(week(0.3, 3), now), true); // 57% gone, 30% used
+  assert.equal(offPeakWindow(week(0.95, 0.5), now), false);
+  assert.equal(offPeakWindow({ unifiedWindows: {} }, now), false);
+  assert.equal(offPeakWindow(null, now), false);
+});
