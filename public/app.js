@@ -2142,7 +2142,7 @@ function connect() {
     // Morning brief: once, the first time Pit Wall is opened each day.
     if (!S.briefChecked) {
       S.briefChecked = true;
-      if (S.data.settings.lastBriefDay !== S.data.settings.today && !openOnLoad) more.showBrief({ markSeen: true });
+      if (S.data.settings.lastBriefDay !== S.data.settings.today && !openOnLoad) more.showBrief({ markSeen: true, skipIfEmpty: true });
     }
   });
   es.addEventListener('fresh', e => {

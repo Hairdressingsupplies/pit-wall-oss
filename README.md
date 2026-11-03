@@ -32,11 +32,12 @@ leave it out for a chat-and-board-only install. Setup checks everything first, t
 - **Adds a Startup shortcut**, so Pit Wall starts hidden when you log in.
 - **Reads** your Claude Code transcripts (`~/.claude/projects`) and live sessions (`~/.claude/sessions`) to build the
   board. It never edits them.
-- **Runs your own `claude.exe`** for each chat on your normal login, in **auto mode** (Claude Code's classifier
-  approves or blocks each action; anything it is unsure of comes to you for approval). It never uses
+- **Runs your own `claude.exe`** for each chat on your normal login, in Claude Code's **auto mode**. It never uses
   bypass-permissions, and you can change a chat's permissions.
-- **Keeps everything in `data/`** inside the repo (database, chat logs, settings). It is git-ignored and never leaves
-  your PC. The page listens on 127.0.0.1 only; reaching it from another PC is opt-in (see **Use it from another PC**).
+- **Makes small background Claude calls** on your subscription: naming sessions (Haiku), sorting them into projects,
+  and a one-word Haiku probe that reads your usage limits. It also runs `git fetch` to check GitHub for updates.
+- **Stores its own state only in `data/`** inside the repo (database, logs, settings), which is git-ignored. The page
+  listens on 127.0.0.1 only; reaching it from another PC is opt-in (see **Use it from another PC**).
 
 `node src/setup.mjs --uninstall` removes the hooks and the Startup shortcut and stops the server. It leaves `data/`
 alone; delete the folder to remove everything.

@@ -48,7 +48,7 @@ export async function renderUsage() {
     h('div', { class: 'status-strip' },
       h('strong', {}, rate ? `${S.data.usage.rateCodex ? 'Claude ' : ''}${rate.five_hour ? `5-hour ${pct(rate.five_hour.utilization)} · ` : ''}week ${pct(rate.seven_day?.utilization)}` : 'No usage reading yet'),
       burn?.fullAt ? h('span', { class: 'hot-text' }, `At this pace the 5-hour limit runs out about ${hhmm(burn.fullAt)}`) : burn ? h('span', {}, `Burning about ${Math.round(burn.perHour * 100)} points an hour`) : null,
-      h('span', {}, `${fmtK(u.tokens)} tokens handled in 7 days${u.totals?.codex > 0 ? ` (Claude ${fmtK((u.tokensEngine ?? u.totals).claude)} · GPT ${fmtK((u.tokensEngine ?? u.totals).codex)})` : ''}${u.agentShare >= 0.005 ? ` (agents and workflows ${pct(u.agentShare)} of the cost)` : ''}`)),
+      h('span', {}, `${fmtK(u.tokens)} token${u.tokens === 1 ? '' : 's'} handled in 7 days${u.totals?.codex > 0 ? ` (Claude ${fmtK((u.tokensEngine ?? u.totals).claude)} · GPT ${fmtK((u.tokensEngine ?? u.totals).codex)})` : ''}${u.agentShare >= 0.005 ? ` (agents and workflows ${pct(u.agentShare)} of the cost)` : ''}`)),
     codexUsageStrip(S.data.usage.rateCodex, burnCodex),
     tips.length ? h('section', { class: 'panel tips' }, h('h3', {}, 'Ways to get more out of your limits'), h('ul', {}, tips.map(t => h('li', {}, t)))) : null,
     h('section', { class: 'lane' }, h('div', { class: 'lane-head' }, h('h2', {}, 'Heaviest sessions this week'), h('span', { class: 'desc' }, 'Estimated share of this week’s cost, weighting tokens by API price (writing 5×, new input 1×, re-reading 0.05–0.1×). Subscription limits aren’t published per token type, so treat it as a guide.')),
@@ -156,10 +156,13 @@ export async function renderActivity(day = D.S.activityDay ?? D.S.data.settings.
 }
 
 // ── morning brief ────────────────────────────────────────────────────────
-export async function showBrief({ markSeen = true } = {}) {
+export async function showBrief({ markSeen = true, skipIfEmpty = false } = {}) {
   const { S, h, api } = D;
   let b;
   try { b = await api('POST', '/api/brief', { markSeen }); } catch (e) { D.fail(e); return; }
+  // The automatic once-a-day brief stays shut when there is nothing in it (a new install would get a box of zeros).
+  if (skipIfEmpty && ![b.needsYou, b.followupsDue, b.finished, b.failedJobs, b.suggestions, b.nightlyNotes].some(l => l.length)
+    && !roundupWaiting() && !b.waitingToGoLive && !b.staleMemory) return;
   const r = b.rate?.unifiedWindows;
   const item = (label, count, body) => h('section', { class: 'brief-item' }, h('h3', {}, label, h('span', { class: 'count' }, ` ${count}`)), body);
   const decide = (s, accept, li) => api('POST', `/api/suggestions/${s.key}`, { accept })
