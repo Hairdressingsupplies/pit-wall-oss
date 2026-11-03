@@ -12,10 +12,11 @@ test('codex_rate_event never lands in kv rate', () => {
 
 test('rate history keeps engines apart', () => {
   const s = openDb(':memory:');
-  s.addRateReading('2026-10-08T10:00:00Z', 0.1, 0.2, null);
-  s.addRateReading('2026-10-08T10:01:00Z', 0.5, 0.6, null, 'codex');
-  const claude = s.rateReadingsSince('2026-10-08T00:00:00Z');
+  const ago = mins => new Date(Date.now() - mins * 60_000).toISOString(); // recent: readings over 8 days old are purged
+  s.addRateReading(ago(2), 0.1, 0.2, null);
+  s.addRateReading(ago(1), 0.5, 0.6, null, 'codex');
+  const claude = s.rateReadingsSince(ago(60));
   assert.equal(claude.length, 1);
   assert.equal(claude[0].five, 0.1);
-  assert.equal(s.rateReadingsSince('2026-10-08T00:00:00Z', 'codex')[0].five, 0.5);
+  assert.equal(s.rateReadingsSince(ago(60), 'codex')[0].five, 0.5);
 });

@@ -8,6 +8,39 @@ included — without hunting for a terminal. It also runs a background job queue
 
 Local only: `http://127.0.0.1:4040`. Windows only for now (notifications, scheduled jobs and the start-up shortcut use Windows).
 
+## Quick start
+
+You need Windows, [Node.js](https://nodejs.org) 24 or newer, git, and [Claude Code](https://claude.com/claude-code)
+installed and logged in. There is no `npm install`: Pit Wall has no dependencies.
+
+```powershell
+cd $HOME\Documents\GitHub
+git clone https://github.com/Hairdressingsupplies/pit-wall-oss.git pit-wall
+cd pit-wall
+node src/setup.mjs --name "Your name" --automation
+```
+
+Clone into a folder called **`pit-wall`** (the last argument above): the installer and the hooks look for that name,
+and a plain `git clone` would name it `pit-wall-oss`. `--automation` turns on the background **Queue** and **Agents**;
+leave it out for a chat-and-board-only install. Setup checks everything first, then opens http://127.0.0.1:4040.
+`node src/setup.mjs --check` re-runs the checks; `--uninstall` undoes it (see below).
+
+### What it changes on your PC
+
+- **Adds six hooks** to your global Claude settings (`~/.claude/settings.json`), after saving a copy as
+  `settings.json.bak-pitwall-<date>`. Your other hooks are kept. See **The status hook** below.
+- **Adds a Startup shortcut**, so Pit Wall starts hidden when you log in.
+- **Reads** your Claude Code transcripts (`~/.claude/projects`) and live sessions (`~/.claude/sessions`) to build the
+  board. It never edits them.
+- **Runs your own `claude.exe`** for each chat on your normal login, in **auto mode** (Claude Code's classifier
+  approves or blocks each action; anything it is unsure of comes to you for approval). It never uses
+  bypass-permissions, and you can change a chat's permissions.
+- **Keeps everything in `data/`** inside the repo (database, chat logs, settings). It is git-ignored and never leaves
+  your PC. The page listens on 127.0.0.1 only; reaching it from another PC is opt-in (see **Use it from another PC**).
+
+`node src/setup.mjs --uninstall` removes the hooks and the Startup shortcut and stops the server. It leaves `data/`
+alone; delete the folder to remove everything.
+
 ## Run it
 
 Pit Wall **starts by itself when you log in** (a shortcut in your Windows Startup folder runs
@@ -57,11 +90,12 @@ for queued jobs, and `liveSystems` names what queued jobs are told never to chan
 
 ## Set up on another PC
 
-Clone the repo to `Documents\GitHub\pit-wall` and run `node src/setup.mjs --name … --about … --workspace …`.
+Clone the repo into a folder named `pit-wall` (see **Quick start**) and run
+`node src/setup.mjs --name … --about … --workspace … [--automation]`.
 Double-clicking **`Setup Pit Wall.cmd`** does the same and asks for anything missing. The installer:
 
 - checks Node 24+, that Pit Wall can start Claude Code, and that Claude is logged in;
-- writes `data/local.json` with `automation: false`;
+- writes `data/local.json` (`automation: false` unless you pass `--automation`);
 - backs up `~/.claude/settings.json`, then adds the six hooks (re-running never duplicates them, and other hooks are kept);
 - adds the Startup shortcut, starts Pit Wall and opens the page.
 
@@ -341,11 +375,12 @@ restart. Code: `src/remote.mjs`.
 
 ## The status hook (in your global Claude settings)
 
-`~/.claude/settings.json` has four hooks (UserPromptSubmit, Notification, Stop, SessionEnd) that run
+Setup adds six hooks to `~/.claude/settings.json`. Four (UserPromptSubmit, Notification, Stop, SessionEnd) run
 `src/hook-status.mjs` in the background. It writes one small file per session to
-`~/.claude/pitwall-status/` and nothing else — no output, always exits 0, 5-second limit. A backup
-of the settings from before it was added is at `~/.claude/settings.json.bak-pitwall-2026-09-29`.
-To remove it, delete those four entries (or run `/hooks` in Claude Code).
+`~/.claude/pitwall-status/` and nothing else — no output, always exits 0, 5-second limit. A fifth,
+`UserPromptSubmit`, runs `src/hook-inbox.mjs` (see **Task status → the chat**). Setup saves your settings from before as
+`~/.claude/settings.json.bak-pitwall-<date>`. To remove them, run `node src/setup.mjs --uninstall` (or delete
+the entries, or use `/hooks` in Claude Code).
 
 A sixth, synchronous `PreToolUse` hook (matcher `CronCreate`) runs `src/hook-cron.mjs` — see
 **Scheduled checks** above. Recurring crons (`/loop`) and one-shots under 15 minutes pass through;
