@@ -102,7 +102,7 @@ export class Runner extends EventEmitter {
       pending: [...r.pending.entries()].map(([requestId, { raw, ...p }]) => ({ requestId, ...p })),
       partial: r.partial, turn: this.#turnView(r), queued: [...r.queued.values()].map(({ uuid, text, ts }) => ({ uuid, text, ts })), error: r.error, running: !!r.proc, adopted: !!r.adopted, lost: !!r.lost,
       backgroundTasks: this.#jobs(r).length, agentsWorking: this.#agentJobs(r).length,
-      jobs: this.#jobs(r).map(t => ({ id: t.id, type: t.type, description: t.description, working: this.#working(t), startedAt: t.startedAt ?? null })),
+      jobs: this.#jobs(r).map(t => ({ id: t.id, type: t.type, description: t.description, working: this.#working(t), startedAt: t.startedAt ?? null, toolUseId: t.toolUseId ?? null })),
       // A Codex chat with a turn map (its bridge said so at init) can fork and rewind; Claude chats always can.
       codexBranching: r.engine === 'codex' ? !!r.codexBranching : undefined,
     };

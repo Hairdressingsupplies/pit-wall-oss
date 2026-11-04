@@ -132,6 +132,18 @@ test('agentDetail drops the workflow harness preamble from the prompt', async ()
   assert.equal(agentDetail(dir, 'b2').prompt, 'Fact-check the report.\n\n  1. Read it.');
 });
 
+test('agentDetail finds an Agent call’s agent by the call’s tool_use id', async () => {
+  const { agentDetail } = await import('../src/transcripts.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pw-agent-'));
+  const sub = path.join(dir, 'subagents');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.writeFileSync(path.join(sub, 'agent-c3.jsonl'), JSON.stringify({ type: 'user', message: { content: 'Hunt for XSS.' } }) + '\n');
+  fs.writeFileSync(path.join(sub, 'agent-c3.meta.json'), JSON.stringify({ description: 'Hunter h08', toolUseId: 'toolu_01Abc' }));
+  fs.writeFileSync(path.join(sub, 'agent-d4.meta.json'), '{not json');
+  assert.equal(agentDetail(dir, 'toolu_01Abc').prompt, 'Hunt for XSS.');
+  assert.equal(agentDetail(dir, 'toolu_01Nope'), null);
+});
+
 test('a Codex usage entry (assistant, empty content) never shows, and leaves "last reply" and "asked a question" alone', async () => {
   const { Transcript } = await import('../src/codex-transcript.mjs');
   const { usageEntry } = await import('../src/codex-translate.mjs');

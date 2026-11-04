@@ -108,7 +108,7 @@ test('runner: a command Claude was waiting on that timed out into the background
   await tick();
   const r = runner.get(id);
   assert.equal(r.status, 'agents_working');
-  assert.deepEqual(runner.publicRun(r).jobs.map(({ startedAt, ...j }) => j), [{ id: 'bgr', type: 'local_bash', description: 'Fetch inboxes', working: true }]);
+  assert.deepEqual(runner.publicRun(r).jobs.map(({ startedAt, ...j }) => j), [{ id: 'bgr', type: 'local_bash', description: 'Fetch inboxes', working: true, toolUseId: 'tu1' }]);
   assert.equal(runner.publicRun(r).agentsWorking, 1);
 
   // It finished (as "failed" — the shell's exit), and Claude is woken without a message from Pit Wall.

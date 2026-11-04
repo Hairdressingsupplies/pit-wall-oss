@@ -27,6 +27,7 @@ import { usageTop, tokensByEngine, claudeCacheShares, weekByEngine, weekShares, 
   repoHealth, clashes, listSkills, analyseTranscript, extractHandoff } from './insights.mjs';
 import os from 'node:os';
 import { classify, loadRemote, AccessKeys } from './remote.mjs';
+import { resolveDownload, downloadHeaders, transcriptFolders, transcriptPaths } from './files.mjs';
 import { loadCommandCache, saveCommandCache, buildCommands, handoffText } from './commands.mjs';
 import { ENGINES, isEngine, defaultEngine, engineFor, shouldPollCodex, codexPollBackoff, codexEnabled, keepStoredModel } from './engines.mjs';
 import { codexAccount, validModel, validEffort } from './codex-exec.mjs';
@@ -390,6 +391,12 @@ function sessionCwd(id) {
   if (found) return found;
   const file = scanner.transcriptIndex(new Set([id])).get(id)?.file;
   return (file ? summariseTranscript(file)?.cwd : null) ?? known[0] ?? null;
+}
+
+/** A session's transcript as text: its replies give paths relative to any folder it worked in, or just a file's name. */
+function sessionTranscript(id) {
+  const file = scanner.transcriptIndex(new Set([id])).get(id)?.file;
+  try { return file ? fs.readFileSync(file, 'utf8') : ''; } catch { return ''; }
 }
 
 // ── fresh start ───────────────────────────────────────────────────────────
@@ -800,6 +807,7 @@ const STATIC = {
   '/markdown.js': ['markdown.js', 'text/javascript; charset=utf-8'],
   '/more.js': ['more.js', 'text/javascript; charset=utf-8'],
   '/chat-extras.js': ['chat-extras.js', 'text/javascript; charset=utf-8'],
+  '/agent-rows.js': ['agent-rows.js', 'text/javascript; charset=utf-8'],
   '/engine-text.js': ['engine-text.js', 'text/javascript; charset=utf-8'],
   '/speech.js': ['speech.js', 'text/javascript; charset=utf-8'],
   '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
@@ -879,6 +887,18 @@ async function api(req, res, url) {
   }
   // A file dropped into a chat that the page can't name by its path (or when used remotely): keep a copy Claude can read.
   if (a === 'uploads' && method === 'POST') return send(res, 201, await saveUpload(req, url));
+  // A file a chat mentions, saved by the browser (the link in a reply). Relative paths are the chat's own folder.
+  if (a === 'files' && method === 'GET') {
+    const sid = String(url.searchParams.get('session') ?? '');
+    const cwd = /^[0-9a-f-]{36}$/i.test(sid) ? sessionCwd(sid) : null;
+    const text = cwd ? sessionTranscript(sid) : '';
+    const f = resolveDownload(url.searchParams.get('path'), { cwd, seen: transcriptFolders(text), mentions: rel => transcriptPaths(text, rel), roots: [config.workspaceRoot, ...config.extraFolders], blocked: [config.dataDir] });
+    // The page asks first, so a link that can't be served says why instead of saving a failed "files.json".
+    if (url.searchParams.has('check')) return send(res, 200, { ok: true, name: f.name });
+    res.writeHead(200, downloadHeaders(f));
+    fs.createReadStream(f.file).on('error', () => res.destroy()).pipe(res);
+    return;
+  }
   // Codex signs in through its own browser flow: open it in a visible terminal on this PC.
   if (a === 'codex' && b === 'login' && method === 'POST') {
     // The sign-in terminal and browser open on this PC's desktop: from a phone nobody would see them.

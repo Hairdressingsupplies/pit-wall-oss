@@ -261,12 +261,13 @@ setInterval(() => {
     if (el.textContent !== text) el.textContent = text;
   }
 }, 5000);
-/** Every background task of the open chat — commands too — with how long it has run and a Stop button. */
+/** The open chat's background commands (agents and workflows are in the agents panel), how long each has run, and a Stop button. */
 export function renderTasks() {
   const { h } = D;
   const box = D.$('#tasks');
   if (!box) return;
-  const jobs = D.S.chat?.run?.running ? D.S.chat.run.jobs ?? [] : [];
+  // Agents and workflows are listed in the agents panel; this strip keeps the rest (commands).
+  const jobs = D.S.chat?.run?.running ? (D.S.chat.run.jobs ?? []).filter(j => !['local_agent', 'remote_agent', 'local_workflow'].includes(j.type)) : [];
   box.hidden = !jobs.length;
   if (!jobs.length) { box.replaceChildren(); return; }
   box.replaceChildren(h('span', { class: 'tasks-label' }, 'In the background'),

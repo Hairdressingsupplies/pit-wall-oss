@@ -16,6 +16,10 @@ const extras = await import('./chat-extras.js').catch(() => ({
   init() {}, userActions: () => null, replyActions: () => null, markActions() {}, renderTasks() {}, toggleBtw() {}, closeBtw() {},
   planCard: null, thinkingEl: () => null, colorRow: () => null, forkDialog() {}, lastForkable: () => null,
 }));
+// Soft-loaded for the same reason; without it the agents panel shows labels as they are, in start order.
+const { stripCommonPrefix, splitId, doingLabel, sortRows } = await import('./agent-rows.js').catch(() => ({
+  stripCommonPrefix: l => l, splitId: n => ({ id: '', name: n }), doingLabel: t => t ?? '', sortRows: r => r,
+}));
 // Soft-loaded too; null (no Read aloud, no menu switches) when it isn't served yet or the browser can't speak.
 const speech = await import('./speech.js').then(m => (m.supported() ? m : null)).catch(() => null);
 
@@ -72,6 +76,14 @@ function toast(msg, err = false) {
   toastTimer = setTimeout(() => { t.className = 'toast'; }, err ? 6000 : 2500);
 }
 const fail = e => toast(e.message, true);
+// A file link asks first: a failed download only shows as a useless "files.json" in the browser's list.
+document.addEventListener('click', e => {
+  const a = e.target.closest?.('a.file-link');
+  if (!a) return;
+  if (a.dataset.checked) { delete a.dataset.checked; return; }
+  e.preventDefault();
+  api('GET', `${a.getAttribute('href')}&check=1`).then(() => { a.dataset.checked = '1'; a.click(); }).catch(fail);
+});
 
 function ago(iso) {
   if (!iso) return '';
@@ -873,6 +885,8 @@ async function renderJobs(fresh = false) {
 
 // ── chat ─────────────────────────────────────────────────────────────────
 const session = () => S.data?.sessions.find(s => s.id === S.selected) ?? null;
+// Paths in Claude's replies become download links; relative ones are the open chat's folder.
+const replyOpts = () => ({ files: { session: S.selected ?? null } });
 
 async function openChat(id) {
   if (S.selected && S.selected !== id) saveDraft();
@@ -991,9 +1005,9 @@ function applyChatWidth(px) {
 
 const JOB_WORDS_BG = { local_agent: 'agent', local_workflow: 'workflow', local_bash: 'command' };
 
-/** ", running in the background: Review task 2 (agent), probe (workflow) +1 more" for the chat header. */
+/** ", running in the background: dev server (command)" for the chat header. Agents and workflows are in the agents panel instead. */
 function jobsText(run) {
-  const jobs = run?.jobs ?? [];
+  const jobs = (run?.jobs ?? []).filter(j => !['local_agent', 'remote_agent', 'local_workflow'].includes(j.type));
   if (!jobs.length) return '';
   const names = jobs.slice(0, 3).map(j => `${j.description || 'job'}${JOB_WORDS_BG[j.type] ? ` (${JOB_WORDS_BG[j.type]})` : ''}`);
   return `, running in the background: ${names.join(', ')}${jobs.length > 3 ? ` +${jobs.length - 3} more` : ''}`;
@@ -1203,7 +1217,8 @@ function agentEl(item) {
       list.classList.toggle('recent');
       e.target.textContent = list.classList.contains('recent') ? `Show all ${list.children.length} steps` : 'Show only the latest steps';
     } }),
-    inp.prompt ? h('details', { class: 'agent-prompt' }, h('summary', {}, 'Prompt'), h('pre', {}, String(inp.prompt))) : null);
+    inp.prompt ? h('details', { class: 'agent-prompt' }, h('summary', {}, 'Prompt'), h('pre', {}, String(inp.prompt))) : null,
+    h('button', { class: 'link agent-open', type: 'button', onclick: () => openAgentPanel(item.id, item.id) }, 'Open the full view'));
   d.agent = { start: Date.parse(item.ts) || Date.now(), steps: 0, last: null, lastAt: 0, end: null, failed: false, background: !!inp.run_in_background };
   renderAgent(d);
   return d;
@@ -1243,22 +1258,122 @@ function renderAgent(d) {
   if (!more.hidden && list.classList.contains('recent')) more.textContent = `Show all ${list.children.length} steps`;
 }
 
-/** The "agents working" strip above the composer, and the note under a message Claude will read later. */
+// ── agents panel: every running agent of the open chat, plain and workflow, above the composer ──
+// One line when there are many; open, a scrolling list with failed and quiet agents first. Click a row for its full view.
+const PANEL_OPEN_UPTO = 4; // up to this many rows it starts open
+const shortAgo = ms => (ms < 60_000 ? '<1m' : since(ms));
+
+/** A plain Agent call's state, shaped like a workflow agent so the panel and the full view treat both alike. */
+function plainAgent(d) {
+  const a = d.agent;
+  return { id: d.dataset.id, label: d.querySelector('.tsum')?.textContent ?? 'agent', state: agentRunning(d) ? 'running' : a.end ? (a.failed ? 'failed' : 'done') : 'unknown',
+    startedAt: a.start, lastAt: a.lastAt || null, lastTool: a.lastTool ?? null, lastSummary: a.lastSummary ?? null,
+    durationMs: a.end ? a.end - a.start : null, tools: a.steps, model: d.input?.model ?? null };
+}
+
+/** Running plain agents, running workflows with their running/failed agents, and the counts for the one-line summary. */
+function panelData(st, now = Date.now()) {
+  const jobs = S.chat?.run?.jobs ?? [];
+  const jobFor = toolUseId => jobs.find(j => j.toolUseId && j.toolUseId === toolUseId) ?? null;
+  const row = (a, parent) => {
+    const state = a.state === 'start' ? 'running' : a.state; // a workflow journal read from disk says 'start'
+    return { ...a, state, key: a.id ?? a.label, parent, quiet: state === 'running' && !!a.lastAt && now - a.lastAt > QUIET_MS };
+  };
+  const agents = [...st.querySelectorAll('.tool.agent')].filter(agentRunning).map(d => ({ ...row(plainAgent(d), d.dataset.id), job: jobFor(d.dataset.id) }));
+  // Rebuilt from disk (a terminal's chat) a workflow's status is 'unknown': running while the chat is busy.
+  const workflows = [...st.querySelectorAll('.tool')].filter(t => t.wfItem?.status === 'running' || (t.wfItem?.status === 'unknown' && chatBusy())).map(t => {
+    const all = t.wfItem.agents.map(a => row(a, t.dataset.id));
+    const count = state => all.filter(a => a.state === state).length;
+    return { key: t.dataset.id, title: t.querySelector('.tsum')?.textContent || 'Workflow', job: jobFor(t.dataset.id), total: all.length,
+      done: count('done'), queued: count('queued'), rows: all.filter(a => a.state === 'running' || a.state === 'failed') };
+  });
+  const rows = [...agents, ...workflows.flatMap(w => w.rows)];
+  return { agents, workflows, rows, working: rows.filter(r => r.state === 'running' && !r.quiet).length,
+    quiet: rows.filter(r => r.quiet).length, failed: rows.filter(r => r.state === 'failed').length };
+}
+
+async function stopJob(job, btn) {
+  if (btn) btn.disabled = true;
+  try { await api('POST', `/api/sessions/${S.selected}/tasks/${encodeURIComponent(job.id)}`); toast('Stopping it'); } catch (x) { fail(x); }
+}
+
+/** Rows for a group of agents; names lose the words they all share ("Hunter h01: …" → id "h01" and the rest). */
+function panelRows(rows, now) {
+  const names = stripCommonPrefix(rows.map(r => r.label ?? ''));
+  return sortRows(rows.map((r, i) => ({ ...r, ...splitId(names[i]) }))).map(r => {
+    const doing = r.state === 'failed' ? 'failed' : r.quiet ? `quiet ${since(now - r.lastAt)}` : doingLabel(r.lastTool, r.lastSummary) || 'working';
+    return h('li', { class: `ap-row ${r.state}${r.quiet ? ' quiet' : ''}` },
+      h('button', { class: 'ap-open', type: 'button', title: `${r.label}\n${doing}\nOpen this agent`, onclick: () => openAgentPanel(r.parent, r.key) },
+        h('span', { class: 'wf-dot' }), h('span', { class: 'ap-id' }, r.id), h('span', { class: 'ap-name' }, r.name),
+        h('span', { class: 'ap-time' }, r.startedAt ? shortAgo(now - r.startedAt) : ''), h('span', { class: 'ap-doing' }, doing)),
+      r.job ? h('button', { class: 'link ap-stop', type: 'button', title: 'Stop just this agent; the chat carries on', onclick: e => stopJob(r.job, e.currentTarget) }, 'Stop') : null);
+  });
+}
+
+let stripQueued = false;
+let stripPressed = false; // a redraw between press and release would swallow the click
+/** Redraws at most once a frame: a dozen busy agents send many steps a second. */
 function renderAgentStrip() {
+  if (stripQueued) return;
+  stripQueued = true;
+  requestAnimationFrame(() => { stripQueued = false; drawAgentStrip(); });
+}
+
+/** The agents panel above the composer, and the note under a message Claude will read later. */
+function drawAgentStrip(force = false) {
   const strip = $('#agent-strip');
   const st = $('#stream');
-  if (!strip || !st) return;
+  if (!strip || !st || !S.chat) return;
   st.querySelectorAll('.tool.agent').forEach(renderAgent);
+  if (!strip.onpointerdown) {
+    strip.onpointerdown = () => { stripPressed = true; };
+    strip.onpointerup = strip.onpointercancel = strip.onpointerleave = () => { stripPressed = false; renderAgentStrip(); };
+  }
+  if (!force && stripPressed) return;
+  const now = Date.now();
+  const p = panelData(st, now);
   const running = [...st.querySelectorAll('.tool.agent.running')];
   const waiting = running.some(d => !d.agent.background && [...st.querySelectorAll('.msg.user')].some(m => d.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING));
-  strip.hidden = !running.length;
-  strip.replaceChildren(
+  strip.hidden = !p.rows.length && !p.workflows.length;
+  if (strip.hidden) { strip.replaceChildren(); return; }
+
+  // Open/closed and the list's scroll live outside the DOM, which is rebuilt on every step.
+  const ui = (S.chat.agentPanel ??= { open: null, scroll: 0, confirmAll: 0 });
+  const open = ui.open ?? p.rows.length <= PANEL_OPEN_UPTO;
+  const oldList = strip.querySelector('.ap-list');
+  if (oldList) ui.scroll = oldList.scrollTop;
+  const toggle = () => { ui.open = !open; drawAgentStrip(true); };
+  const n = p.agents.length + p.workflows.reduce((t, w) => t + w.total - w.done, 0);
+  const facts = [p.working ? `${p.working} working` : '', p.quiet ? `${p.quiet} quiet` : '', p.failed ? `${p.failed} failed` : '',
+    ...p.workflows.map(w => `${w.title}: ${w.done}/${w.total} done`)].filter(Boolean);
+  const stoppable = [...p.agents.map(a => a.job), ...p.workflows.map(w => w.job)].filter(Boolean);
+  const confirming = now - ui.confirmAll < 4000;
+  const head = h('div', { class: 'ap-bar' },
     h('span', { class: 'agent-dot' }),
-    h('span', { class: 'agent-count' }, `${running.length} agent${running.length === 1 ? '' : 's'} working`),
-    h('ul', {}, running.map(d => h('li', {}, h('button', { class: 'link', type: 'button', title: 'Show it in the chat',
-      onclick: () => { d.open = true; d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } },
-      h('strong', {}, d.querySelector('.tsum').textContent), ` · ${since(Date.now() - d.agent.start)}`, d.agent.last ? h('span', { class: 'agent-now' }, ` · ${d.agent.last}`) : null)))),
-    ...(waiting ? [h('span', { class: 'agent-wait' }, 'Claude reads your message when the agent finishes.')] : []));
+    h('button', { class: 'link ap-summary', type: 'button', 'aria-expanded': String(open), onclick: toggle },
+      h('span', { class: 'agent-count' }, `${n} agent${n === 1 ? '' : 's'}`), facts.length ? h('span', { class: 'agent-now' }, ` · ${facts.join(' · ')}`) : null),
+    h('button', { class: 'link ap-toggle', type: 'button', onclick: toggle }, open ? 'Hide ▴' : 'Show ▾'),
+    stoppable.length > 1 ? h('button', { class: `link ap-stop-all${confirming ? ' confirm' : ''}`, type: 'button', title: 'Stop every agent and workflow listed here; the chat carries on',
+      onclick: () => {
+        if (!confirming) { ui.confirmAll = Date.now(); drawAgentStrip(true); setTimeout(() => drawAgentStrip(true), 4100); return; }
+        ui.confirmAll = 0;
+        stoppable.forEach(j => stopJob(j));
+      } }, confirming ? `Stop all ${stoppable.length}? Click again` : 'Stop all') : null);
+  const groups = [];
+  if (p.agents.length) groups.push(h('ul', { class: 'ap-group' }, panelRows(p.agents, now)));
+  for (const w of p.workflows) {
+    groups.push(h('div', { class: 'ap-wf' },
+      h('button', { class: 'link ap-wf-title', type: 'button', title: 'Show it in the chat', onclick: () => {
+        const t = toolFor(st, w.key);
+        if (t) { t.open = true; t.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      } }, w.title),
+      h('span', { class: 'agent-now' }, [`${w.done}/${w.total} done`, w.queued ? `${w.queued} waiting` : ''].filter(Boolean).join(' · ')),
+      w.job ? h('button', { class: 'link ap-stop', type: 'button', title: 'Stop this workflow; the chat carries on', onclick: e => stopJob(w.job, e.currentTarget) }, 'Stop workflow') : null));
+    if (w.rows.length) groups.push(h('ul', { class: 'ap-group' }, panelRows(w.rows, now)));
+  }
+  const list = open ? h('div', { class: 'ap-list' }, ...groups) : null;
+  strip.replaceChildren(head, ...(list ? [list] : []), ...(waiting ? [h('span', { class: 'agent-wait' }, 'Claude reads your message when the agent finishes.')] : []));
+  if (list) list.scrollTop = ui.scroll;
 }
 setInterval(() => { if (S.chat) renderAgentStrip(); }, 15_000);
 
@@ -1359,6 +1474,7 @@ function attachWorkflow(container, item) {
 let agentPanel = null;
 function liveAgent(parent, key) {
   const tool = toolFor($('#stream') ?? document, parent);
+  if (tool?.agent) return plainAgent(tool);
   return tool?.wfItem?.agents.find(a => (a.id ?? a.label) === key) ?? null;
 }
 
@@ -1399,7 +1515,7 @@ function openAgentPanel(parent, key) {
       ['Started', a.startedAt ? new Date(a.startedAt).toLocaleTimeString() : detail?.startedAt ? new Date(detail.startedAt).toLocaleTimeString() : ''],
       ['Ran for', a.durationMs != null ? fmtDur(a.durationMs) : a.startedAt ? fmtDur((a.state === 'running' ? Date.now() : a.lastAt ?? Date.now()) - a.startedAt) : ''],
       ['Tool calls', a.tools ?? detail?.stepCount ?? ''], ['Tokens', a.tokens ? fmtTok(a.tokens) : ''], ['Attempt', a.attempt > 1 ? a.attempt : ''],
-      ['Now', a.state === 'running' ? (a.lastAt && Date.now() - a.lastAt > QUIET_MS ? `quiet for ${since(Date.now() - a.lastAt)}` : a.lastTool ?? 'working') : ''],
+      ['Now', a.state === 'running' ? (a.lastAt && Date.now() - a.lastAt > QUIET_MS ? `quiet for ${since(Date.now() - a.lastAt)}` : doingLabel(a.lastTool, a.lastSummary) || 'working') : ''],
     ].filter(([, v]) => v !== '' && v != null);
     head.replaceChildren(h('h2', {}, h('span', { class: `wf-dot ${a.state}` }), ' ', a.label),
       h('dl', { class: 'ap-facts' }, ...facts.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, String(v))])));
@@ -1449,7 +1565,7 @@ function attachSub(container, item) {
     // What the agent handed back — the part worth reading, so it shows as a message, not a step.
     const rep = tool.querySelector('.report');
     rep.hidden = false;
-    rep.replaceChildren(h('div', { class: 'report-label' }, 'Report'), h('div', { class: 'msg assistant', html: renderMarkdown(item.report) }));
+    rep.replaceChildren(h('div', { class: 'report-label' }, 'Report'), h('div', { class: 'msg assistant', html: renderMarkdown(item.report, replyOpts()) }));
     if (tool.agent?.background) { tool.agent.end ??= Date.parse(item.ts) || Date.now(); renderAgent(tool); }
     return;
   }
@@ -1460,7 +1576,7 @@ function attachSub(container, item) {
   const n = list.children.length;
   if (tool.agent) {
     Object.assign(tool.agent, { steps: n, lastAt: Date.parse(item.ts) || Date.now(),
-      last: item.tool ? stepLabel(item.tool, item.summary) : null });
+      last: item.tool ? stepLabel(item.tool, item.summary) : null, lastTool: item.tool ?? null, lastSummary: item.tool ? item.summary : null });
     renderAgent(tool);
   } else tool.querySelector('.tsteps').textContent = ` ${n} step${n === 1 ? '' : 's'}`;
 }
@@ -1480,7 +1596,7 @@ function attachResult(container, item) {
     // A foreground agent's result means it has finished; unless it handed its report back separately, the result is the report.
     Object.assign(tool.agent, { end: Date.parse(item.ts) || Date.now(), failed: !!item.isError });
     const rep = tool.querySelector('.report');
-    if (rep.hidden && text && !handedBack) { rep.hidden = false; rep.replaceChildren(h('div', { class: 'report-label' }, 'Report'), h('div', { class: 'msg assistant', html: renderMarkdown(text) })); }
+    if (rep.hidden && text && !handedBack) { rep.hidden = false; rep.replaceChildren(h('div', { class: 'report-label' }, 'Report'), h('div', { class: 'msg assistant', html: renderMarkdown(text, replyOpts()) })); }
     renderAgent(tool);
     return true;
   }
@@ -1497,7 +1613,7 @@ function itemEl(item) {
         h('button', { class: 'img-btn', type: 'button', 'aria-label': 'View image', onclick: () => viewImage(src) }, h('img', { src, alt: '' })))) : null,
       item.text || null, extras.userActions(item));
     case 'assistant': {
-      const el = h('div', { class: 'msg assistant', 'data-uuid': item.uuid ?? null, html: renderMarkdown(item.text) });
+      const el = h('div', { class: 'msg assistant', 'data-uuid': item.uuid ?? null, html: renderMarkdown(item.text, replyOpts()) });
       const act = extras.replyActions(item);
       if (act) el.append(act);
       return el;
@@ -1549,7 +1665,7 @@ function renderPartial() {
   const p = $('#partial');
   if (!p) return;
   p.hidden = !S.chat.partial;
-  if (S.chat.partial) p.innerHTML = renderMarkdown(S.chat.partial);
+  if (S.chat.partial) p.innerHTML = renderMarkdown(S.chat.partial, replyOpts());
 }
 
 // ── working line: the terminal's "✻ Pondering… (12s · ↓ 1.2k tokens · thinking)" while Claude has the turn ──
@@ -2174,7 +2290,7 @@ function connect() {
     st.querySelectorAll('.more').forEach(m => { if (m.textContent === 'No messages yet.') m.remove(); });
     if (item.kind === 'assistant') { S.chat.partial = ''; renderPartial(); }
     appendItem(st, item);
-    if (item.kind === 'tool' || item.kind === 'sub' || item.kind === 'tool_result' || item.kind === 'user') renderAgentStrip();
+    if (['tool', 'sub', 'tool_result', 'user', 'workflow'].includes(item.kind)) renderAgentStrip();
     if (stick) st.scrollTop = st.scrollHeight;
   });
   // A "! command" still running: swap in its latest output where it already sits in the chat.

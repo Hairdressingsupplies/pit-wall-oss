@@ -130,7 +130,11 @@ To stop it starting at login: delete **Pit Wall** from `shell:startup`.
   shows as **agents working** (no "your turn", no notification) and the header names what is
   running; "your turn" comes once, after the last one finishes and Claude has replied. An Agent
   call shows the agent's steps and its report; a Workflow call shows its phases and each agent's
-  state, live. Both are rebuilt from the agent files when you reopen a chat. On a chat Pit Wall runs, Finish and End session
+  state, live. Both are rebuilt from the agent files when you reopen a chat. Above the message box, one
+  **agents panel** lists every running agent, plain or in a workflow: a one-line summary (working · quiet
+  · failed · workflow progress) that opens into a scrolling list, with failed and quiet agents first,
+  what each is doing in words, and Stop on hover (Stop all asks twice). Click any agent, there or under its
+  Agent call, for its full view: prompt, every step with input and result, and its report. On a chat Pit Wall runs, Finish and End session
   ask twice while agents are running (they would be stopped), and Move here is refused until a
   terminal's agents have finished. A background shell command (a dev server) does not count.
   Not counted yet: agent and workflow tokens in the usage figures.

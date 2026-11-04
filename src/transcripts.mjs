@@ -369,6 +369,13 @@ export function agentDetail(sessionDir, agentId) {
     let runs = [];
     try { runs = fs.readdirSync(path.join(sub, 'workflows')); } catch { /* no workflows */ }
     file = runs.map(r => path.join(sub, 'workflows', r, `agent-${agentId}.jsonl`)).find(f => fs.existsSync(f));
+    // An Agent call's agent is known in the chat only by that call's id, which its .meta.json names.
+    if (!file) {
+      let metas = [];
+      try { metas = fs.readdirSync(sub).filter(f => f.endsWith('.meta.json')); } catch { /* no agents */ }
+      const m = metas.find(f => readJson(path.join(sub, f))?.toolUseId === agentId);
+      file = m && path.join(sub, m.replace(/\.meta\.json$/, '.jsonl'));
+    }
     if (!file) return null;
   }
   let text;
